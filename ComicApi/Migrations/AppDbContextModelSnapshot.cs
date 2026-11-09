@@ -183,6 +183,8 @@ namespace ComicApi.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("ParentId");
 
                     b.HasIndex("ReplyToUserId");
@@ -270,7 +272,7 @@ namespace ComicApi.Migrations
 
                     b.HasKey("UserId", "ComicId");
 
-                    b.HasIndex("ComicId");
+                    b.HasIndex("ComicId", "Stars");
 
                     b.ToTable("ratings", null, t =>
                         {

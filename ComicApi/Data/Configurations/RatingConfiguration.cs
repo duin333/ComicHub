@@ -18,5 +18,9 @@ public class RatingConfiguration : IEntityTypeConfiguration<Rating>
 
         b.HasOne(r => r.Comic).WithMany(c => c.Ratings)
             .HasForeignKey(r => r.ComicId).OnDelete(DeleteBehavior.Cascade);
+
+        // 12.1: chỉ mục phủ cho truy vấn tính trung bình, đếm và phân bố số sao theo truyện.
+        // Cũng thay cho chỉ mục khóa ngoại ComicId (tiền tố của chỉ mục này)
+        b.HasIndex(r => new { r.ComicId, r.Stars });
     }
 }

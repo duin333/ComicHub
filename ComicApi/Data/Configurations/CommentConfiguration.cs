@@ -28,5 +28,8 @@ public class CommentConfiguration : IEntityTypeConfiguration<Comment>
 
         // Tăng tốc việc lấy bình luận gốc của một truyện (thêm cột ParentId vào chỉ mục)
         b.HasIndex(c => new { c.ComicId, c.ParentId, c.CreatedAt });
+
+        // 12.1: trang admin luôn sắp xếp bình luận mới nhất trước, và thẻ thống kê lọc theo thời gian
+        b.HasIndex(c => c.CreatedAt);
     }
 }
