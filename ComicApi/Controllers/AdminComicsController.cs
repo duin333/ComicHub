@@ -6,12 +6,14 @@ using ComicApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ComicApi.Infrastructure;
 
 namespace ComicApi.Controllers;
 
 [ApiController]
 [Route("api/admin/comics")]
 [Authorize(Roles = Roles.Admin)]
+[ServiceFilter(typeof(InvalidateCatalogCacheFilter))]
 public class AdminComicsController : ControllerBase
 {
     private readonly AppDbContext _db;

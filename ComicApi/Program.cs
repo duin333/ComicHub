@@ -61,6 +61,10 @@ builder.Services.AddAppRateLimiting(builder.Configuration);
 // Nén HTML, JS, CSS, JSON để tải nhanh hơn
 builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
 
+builder.Services.Configure<CatalogCacheOptions>(builder.Configuration.GetSection("Cache"));
+builder.Services.AddSingleton<ICatalogCache, CatalogCache>();
+builder.Services.AddScoped<InvalidateCatalogCacheFilter>();
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -120,5 +124,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
+app.MapGet("/api/admin/cache/stats", (ICatalogCache cache) => cache.Stats)
+   .RequireAuthorization(p => p.RequireRole("Admin"));
 app.MapAppHealthChecks();
 app.Run();

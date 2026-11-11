@@ -5,12 +5,14 @@ using ComicApi.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ComicApi.Infrastructure;
 
 namespace ComicApi.Controllers;
 
 [ApiController]
 [Route("api/admin/genres")]
 [Authorize(Roles = Roles.Admin)]
+[ServiceFilter(typeof(InvalidateCatalogCacheFilter))]
 public class AdminGenresController : ControllerBase
 {
     private readonly AppDbContext _db;

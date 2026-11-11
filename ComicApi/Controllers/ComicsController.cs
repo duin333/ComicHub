@@ -1,6 +1,7 @@
 ﻿using ComicApi.DTOs.Comics;
 using ComicApi.Repositories;
 using Microsoft.AspNetCore.Mvc;
+using ComicApi.Services;
 
 namespace ComicApi.Controllers;
 
@@ -10,59 +11,82 @@ public class ComicsController : ControllerBase
 {
     private readonly IComicRepository _comics;
     private readonly IChapterRepository _chapters;
+    private readonly ICatalogCache _cache;
 
-    public ComicsController(IComicRepository comics, IChapterRepository chapters)
+    public ComicsController(IComicRepository comics, IChapterRepository chapters, ICatalogCache cache)
     {
         _comics = comics;
         _chapters = chapters;
+        _cache = cache;
     }
 
-    // GET /api/Comics?keyword=kiem&genreId=1&status=Ongoing&sort=views&page=1&pageSize=12
-    [HttpGet]
-    public async Task<IActionResult> Search([FromQuery] ComicQueryParams query) =>
-        Ok(await _comics.SearchAsync(query));
+    private static readonly HashSet<string> CacheableSorts =
+    new() { "", "updated", "newest", "views", "title", "rating", "follows" };
 
-    // GET /api/Comics/hot?take=10
+    // Chỉ cache các danh sách "duyệt" phổ biến. Tìm theo từ khóa, trang sâu hoặc tham số lạ đi thẳng xuống database,
+    // để người lạ không thể gửi vô số biến thể làm cache đầy rác
+    private static string? SearchCacheKey(ComicQueryParams q)
+    {
+        var sort = (q.Sort ?? "").ToLowerInvariant();
+        var status = q.Status ?? "";
+        var page = Math.Max(1, q.Page);
+        var size = Math.Clamp(q.PageSize, 1, 50);
+
+        if (!string.IsNullOrWhiteSpace(q.Keyword)) return null;
+        if (!CacheableSorts.Contains(sort)) return null;
+        if (status is not ("" or "Ongoing" or "Completed")) return null;
+        if (q.GenreId is < 1 or > 99) return null;
+        if (page > 5 || size > 24) return null;
+
+        return $"search:{sort}:{q.GenreId}:{status}:{page}:{size}";
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Search([FromQuery] ComicQueryParams query)
+    {
+        var key = SearchCacheKey(query);
+        if (key is null) return Ok(await _comics.SearchAsync(query));
+
+        return Ok(await _cache.GetOrCreateAsync(key, () => _comics.SearchAsync(query)));
+    }
+
     [HttpGet("hot")]
     public async Task<IActionResult> Hot([FromQuery] int take = 10)
     {
-        var result = await _comics.SearchAsync(new ComicQueryParams
+        take = Math.Clamp(take, 1, 50);
+        return Ok(await _cache.GetOrCreateAsync($"hot:{take}", async () =>
         {
-            Sort = "views",
-            PageSize = Math.Clamp(take, 1, 50)
-        });
-        return Ok(result.Items);
+            var result = await _comics.SearchAsync(new ComicQueryParams { Sort = "views", PageSize = take });
+            return result.Items;
+        }));
     }
 
-    // GET /api/Comics/latest?take=10
     [HttpGet("latest")]
     public async Task<IActionResult> Latest([FromQuery] int take = 10)
     {
-        var result = await _comics.SearchAsync(new ComicQueryParams
+        take = Math.Clamp(take, 1, 50);
+        return Ok(await _cache.GetOrCreateAsync($"latest:{take}", async () =>
         {
-            Sort = "updated",
-            PageSize = Math.Clamp(take, 1, 50)
-        });
-        return Ok(result.Items);
+            var result = await _comics.SearchAsync(new ComicQueryParams { Sort = "updated", PageSize = take });
+            return result.Items;
+        }));
     }
 
-    // GET /api/Comics/featured?take=5: truyện nổi bật cho banner trang chủ (nhiều lượt xem, kèm mô tả)
     [HttpGet("featured")]
     public async Task<IActionResult> Featured([FromQuery] int take = 5)
     {
-        var top = await _comics.SearchAsync(new ComicQueryParams
+        take = Math.Clamp(take, 1, 10);
+        return Ok(await _cache.GetOrCreateAsync($"featured:{take}", async () =>
         {
-            Sort = "views",
-            PageSize = Math.Clamp(take, 1, 10)
-        });
-
-        var result = new List<ComicDetailDto>();
-        foreach (var c in top.Items)
-        {
-            var detail = await _comics.GetDetailAsync(c.Id);
-            if (detail is not null) result.Add(detail);
-        }
-        return Ok(result);
+            var top = await _comics.SearchAsync(new ComicQueryParams { Sort = "views", PageSize = take });
+            var result = new List<ComicDetailDto>();
+            foreach (var c in top.Items)
+            {
+                var detail = await _comics.GetDetailAsync(c.Id);
+                if (detail is not null) result.Add(detail);
+            }
+            return result;
+        }));
     }
 
     [HttpGet("{id:int}")]
